@@ -738,10 +738,12 @@ export default function Home() {
       try {
         const keysEndpoint = "/api/keys";
         const response = await fetch(keysEndpoint);
-        const keys = await response.json();
-        setKeys(keys);
-
-        
+        if(response.status === 200){
+          const keys = await response.json();
+          setKeys(keys);
+        } else {
+          throw new Error('Failed to fetch API keys: ' + response.statusText);
+        }
       } catch (error) {
         console.error('Failed to fetch API keys:', error);
       }
