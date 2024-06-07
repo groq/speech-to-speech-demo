@@ -12,7 +12,7 @@ export default function SignIn() {
   const router = useRouter();
 
   session.then((session) => {
-    if(session){
+    if(session && session.user){
       router.push('/');
     }
   })
