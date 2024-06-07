@@ -32,7 +32,7 @@ export default function SignIn() {
   };
 
   return (
-    <form onSubmit={handleSubmit}>
+    <form className="p-2" onSubmit={handleSubmit}>
       <div>
         <label>Email</label>
         <input
