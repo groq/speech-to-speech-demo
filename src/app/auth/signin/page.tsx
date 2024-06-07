@@ -1,4 +1,4 @@
-'use client';
+"use client"
 
 import { getSession } from 'next-auth/react';
 import { signIn } from 'next-auth/react';
@@ -8,13 +8,12 @@ import { useRouter } from 'next/navigation';
 export default function SignIn() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const router = useRouter();
-
   const session = getSession();
+  const router = useRouter();
 
   session.then((session) => {
     if(session){
-      window.location.href = '/';
+      router.push('/');
     }
   })
 

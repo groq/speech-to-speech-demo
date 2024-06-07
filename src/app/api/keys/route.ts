@@ -13,6 +13,5 @@ export async function GET(req: any) {
   if (!token) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
-  console.log(process.env)
   return NextResponse.json(keys);
 }

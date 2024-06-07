@@ -1,5 +1,12 @@
-"use client";
+"use client"
+
+import fetch from 'cross-fetch';
 import { getSession } from 'next-auth/react';
+import Groq, { toFile } from "groq-sdk";
+import Cartesia from "@cartesia/cartesia-js";
+import { WebPlayer } from "@cartesia/cartesia-js";
+import React, { useEffect, useRef, useState } from 'react';
+import { useRouter } from 'next/navigation'
 
 // Reflective Woman
 const embedding = [
@@ -395,20 +402,13 @@ const embedding = [
 
 const PLAY_RECORDED_AUDIO = false;
 
-import Groq, { toFile } from "groq-sdk";
-
-import Cartesia from "@cartesia/cartesia-js";
-import { WebPlayer } from "@cartesia/cartesia-js";
-import { useEffect, useRef, useState } from 'react';
-
-
-function useTTS(cartesia: React.MutableRefObject<Cartesia | null>) {
+function useTTS(cartesia: Cartesia) {
   const websocket = useRef<any | null>(null);
 
   useEffect(() => {
     const initializeWebSocket = async () => {
-      if (!websocket.current && cartesia.current) {
-        websocket.current = cartesia.current.tts.websocket({ sampleRate: 44100 });
+      if (!websocket.current && cartesia) {
+        websocket.current = cartesia.tts.websocket({ sampleRate: 44100 });
 
         try {
           await websocket.current.connect();
@@ -419,11 +419,10 @@ function useTTS(cartesia: React.MutableRefObject<Cartesia | null>) {
     };
 
     initializeWebSocket();
-  }, [cartesia.current]);
+  }, [cartesia, websocket]);
 
   const startPlayer = async (response: any) => {
     const player = new WebPlayer({ bufferDuration: 0.02 });
-    console.log(player);
     await player.play(response.source);
   };
 
@@ -471,14 +470,12 @@ async function transcribe(blob: Blob, audioGroq: Groq) {
   return response;
 }
 
-export async function streamCompletion(prompt: string, history: Groq.Chat.ChatCompletionMessageParam[], groq: React.MutableRefObject<Groq | null>): Promise<string> {
-  if(!groq.current){
-    return "";
-  }
+async function streamCompletion(prompt: string, history: Groq.Chat.ChatCompletionMessageParam[], groq: Groq): Promise<string> {
+  
   const startTime = performance.now();
   const stream = true;
 
-  const response = await groq.current.chat.completions.create({
+  const response = await groq.chat.completions.create({
     messages: [
       {
         role: 'system',
@@ -513,18 +510,16 @@ Respond in brief natural sentences as your response will be spoken out loud by t
     // @ts-ignore
     contentBuffer = response.choices[0].message.content;
   }
-  console.log(contentBuffer);
-
   const endTime = performance.now();
   console.log(`[COMPLETION]: ${(endTime - startTime).toFixed(2)} ms`);
 
   return contentBuffer;
 }
 
-const AudioRecorder: React.FC<{ onTranscribe: (transcription: string) => void, onRecordingStart: () => void, onRecordingEnd: () => void,  audioGroq: React.MutableRefObject<Groq | null> }> = ({ onTranscribe, onRecordingStart, onRecordingEnd, audioGroq }) => {
+const AudioRecorder: React.FC<{ onTranscribe: (transcription: string) => void, onRecordingStart: () => void, onRecordingEnd: () => void,  audioGroq: Groq}> = ({ onTranscribe, onRecordingStart, onRecordingEnd, audioGroq }) => {
   const isRecording = useRef<boolean>(false);
   const [mediaRecorder, setMediaRecorder] = useState<MediaRecorder | null>(null);
-  const [audioChunks, setAudioChunks] = useState<Blob[]>([]);
+  const audioChunksRef = useRef<Blob[]>([]);
   const [mimeType, setMimeType] = useState<string>("audio/webm;codecs=opus");
   const [supportedMimeTypes, setSupportedMimeTypes] = useState<string[]>([]);
   const [volume, setVolume] = useState<number>(0);
@@ -545,32 +540,6 @@ const AudioRecorder: React.FC<{ onTranscribe: (transcription: string) => void, o
     const supportedTypes = typesToCheck.filter(type => MediaRecorder.isTypeSupported(type));
     setSupportedMimeTypes(supportedTypes);
   }, []);
-
-  useEffect(() => {
-    if(!isRecording.current){
-      (async () => {
-        console.log('Audio chunks updated:', audioChunks);
-        let transcription = "";
-        for (const chunk of audioChunks) {
-          if(PLAY_RECORDED_AUDIO){
-            const audioUrl = URL.createObjectURL(chunk);
-            const audio = new Audio(audioUrl);
-            audio.play();
-          }
-          
-          console.log(`Chunk size: ${chunk.size} bytes`);
-          if(audioGroq.current){
-            transcription += (await transcribe(chunk, audioGroq.current)).text;
-          } else {
-            console.error("Audio Groq not initialized");
-          }
-        }
-        if (transcription.length > 0) {
-          onTranscribe(transcription);
-        }
-      })()
-    }
-  }, [audioChunks, isRecording.current]);
 
   const handleRecord = async () => {
     if (!isRecording.current) {
@@ -604,12 +573,13 @@ const AudioRecorder: React.FC<{ onTranscribe: (transcription: string) => void, o
       const dataArray = new Uint8Array(analyser.frequencyBinCount);
 
       recorder.ondataavailable = (event: BlobEvent) => {
-        setAudioChunks((currentChunks) => [...currentChunks, event.data]);
+        audioChunksRef.current.push(event.data);
+        
       };
       recorder.start();
       setMediaRecorder(recorder);
       isRecording.current = true;
-      setAudioChunks([]);
+      audioChunksRef.current = [];
 
       const getVolume = () => {
         analyser.getByteFrequencyData(dataArray);
@@ -623,6 +593,11 @@ const AudioRecorder: React.FC<{ onTranscribe: (transcription: string) => void, o
       };
       getVolume();
     } else {
+      if (mediaRecorder) {
+        mediaRecorder.onstop = () => {
+          handleChunks();
+        };
+      }
       mediaRecorder?.stop();
       mediaRecorder?.stream.getTracks().forEach((track: MediaStreamTrack) => track.stop());
       isRecording.current = false;
@@ -630,6 +605,23 @@ const AudioRecorder: React.FC<{ onTranscribe: (transcription: string) => void, o
       setVolume(0);
     }
   };
+
+  async function handleChunks(){
+    let transcription = "";
+    for (const chunk of audioChunksRef.current) {
+      if(PLAY_RECORDED_AUDIO){
+        const audioUrl = URL.createObjectURL(chunk);
+        const audio = new Audio(audioUrl);
+        audio.play();
+      }
+      
+      console.log(`Audio chunk size: ${chunk.size} bytes`);
+      transcription += (await transcribe(chunk, audioGroq)).text;
+    }
+    if (transcription.length > 0) {
+      onTranscribe(transcription);
+    }
+  }
 
   return (
     <>
@@ -653,50 +645,24 @@ const AudioRecorder: React.FC<{ onTranscribe: (transcription: string) => void, o
 };
 
 
-export default function Home() {
-  const session = getSession();
+function App({ cartesiaApiKey, groqApiKey, audioGroqApiKey }: { cartesiaApiKey: string, groqApiKey: string, audioGroqApiKey: string }) {
+  const cartesia = new Cartesia({
+    apiKey: cartesiaApiKey,
+  });
 
-  session.then((session) => {
-    if(!session){
-      window.location.href = '/auth/signin';
-    }
-  })
-  
-  const cartesiaRef = useRef<Cartesia | null>(null);
-  const groqRef = useRef<Groq | null>(null);
-  const audioGroqRef = useRef<Groq | null>(null);
+  const groq = new Groq({ 
+    apiKey: groqApiKey, 
+    dangerouslyAllowBrowser: true 
+  });
 
-  useEffect(() => {
-    const fetchApiKeys = async () => {
-      try {
-        const response = await fetch('/api/keys');
-        const keys = await response.json();
-
-        cartesiaRef.current = new Cartesia({
-          apiKey: keys.cartesiaApiKey,
-        });
-
-        groqRef.current = new Groq({ 
-          apiKey: keys.groqApiKey, 
-          dangerouslyAllowBrowser: true 
-        });
-
-        audioGroqRef.current = new Groq({ 
-          apiKey: keys.audioGroqApiKey, 
-          dangerouslyAllowBrowser: true 
-        });
-      } catch (error) {
-        console.error('Failed to fetch API keys:', error);
-      }
-    };
-
-    fetchApiKeys();
-  }, []);
-  
+  const audioGroq = new Groq({ 
+    apiKey: audioGroqApiKey, 
+    dangerouslyAllowBrowser: true 
+  });
 
   const [history, setHistory] = useState<Groq.Chat.ChatCompletionMessageParam[]>([]);
   const [inputText, setInputText] = useState<string>("");
-  const { speak } = useTTS(cartesiaRef);
+  const { speak } = useTTS(cartesia);
 
   const handleRecordingStart = () => {
     setHistory(prevHistory => [...prevHistory, { role: "user", content: "Recording..." }]);
@@ -709,7 +675,7 @@ export default function Home() {
     setHistory(prevHistory => prevHistory.filter(message => message.content !== "Recording..."));
     setHistory(prevHistory => [...prevHistory, { role: "user", content: transcription }]);
     setHistory(prevHistory => [...prevHistory, { role: "assistant", content: "Thinking..." }]);
-    const response = await streamCompletion(transcription, history, groqRef);
+    const response = await streamCompletion(transcription, history, groq);
     setHistory(prevHistory => prevHistory.filter(message => message.content !== "Thinking..."));
     setHistory(prevHistory => [...prevHistory, { role: "assistant", content: response }]);
     await speak(response);
@@ -722,7 +688,7 @@ export default function Home() {
 
       setHistory(prevHistory => [...prevHistory, { role: "user", content: prompt }]);
       setHistory(prevHistory => prevHistory.filter(message => message.content !== "Thinking..."));
-      const response = await streamCompletion(prompt, history, groqRef);
+      const response = await streamCompletion(prompt, history, groq);
       setHistory(prevHistory => [...prevHistory, { role: "assistant", content: response }]);
       await speak(response);
     }
@@ -741,7 +707,7 @@ export default function Home() {
       <button onClick={handleAddMessage} className="p-2 mt-2 bg-blue-500 text-white rounded-sm hover:bg-blue-600 active:bg-blue-700">
         Send
       </button>
-      <AudioRecorder onTranscribe={handleTranscribe} onRecordingStart={handleRecordingStart} onRecordingEnd={handleRecordingEnd} audioGroq={audioGroqRef} />
+      <AudioRecorder onTranscribe={handleTranscribe} onRecordingStart={handleRecordingStart} onRecordingEnd={handleRecordingEnd} audioGroq={audioGroq} />
       </div>
 
       <div className="flex flex-col">
@@ -753,4 +719,39 @@ export default function Home() {
       </div>
     </div>
   );
+}
+
+export default function Home() {
+  const session = getSession();
+  const router = useRouter()
+
+  session.then((session) => {
+    if(!session){
+      router.push('/auth/signin');
+    }
+  })
+  
+  const [keys, setKeys] = useState<{ cartesiaApiKey: string, groqApiKey: string, audioGroqApiKey: string } | null>(null);
+
+  useEffect(() => {
+    const fetchApiKeys = async () => {
+      try {
+        const keysEndpoint = "/api/keys";
+        const response = await fetch(keysEndpoint);
+        const keys = await response.json();
+        setKeys(keys);
+
+        
+      } catch (error) {
+        console.error('Failed to fetch API keys:', error);
+      }
+    };
+
+    fetchApiKeys();
+  }, []);
+  if(keys){
+    return <App cartesiaApiKey={keys.cartesiaApiKey} groqApiKey={keys.groqApiKey} audioGroqApiKey={keys.audioGroqApiKey} />
+  } else {
+    return <div>Loading...</div>
+  }
 }
