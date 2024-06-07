@@ -1,0 +1,97 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --background-color: #121212;
+  --text-color: #e0e0e0;
+  --button-bg-color: #333333;
+  --button-text-color: #ffffff;
+  --button-hover-bg-color: #454545;
+  --button-active-bg-color: #555555;
+  --input-bg-color: #333333;
+  --input-text-color: #ffffff;
+  --input-placeholder-color: #888888;
+  --message-user-bg-color: #333333;
+  --message-assistant-bg-color: #0c377e;
+}
+
+body {
+  background-color: var(--background-color);
+  color: var(--text-color);
+}
+
+button {
+  background-color: var(--button-bg-color);
+  color: var(--button-text-color);
+}
+
+button:hover {
+  background-color: var(--button-hover-bg-color);
+}
+
+button:active {
+  background-color: var(--button-active-bg-color);
+}
+
+textarea {
+  background-color: var(--input-bg-color);
+  color: var(--input-text-color);
+  ::placeholder {
+    color: var(--input-placeholder-color);
+  }
+}
+
+.message-user {
+  background-color: var(--message-user-bg-color);
+}
+
+.message-assistant {
+  background-color: var(--message-assistant-bg-color);
+}
+
+select {
+  background-color: var(--input-bg-color);
+  color: var(--input-text-color);
+}
+
+form {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+form div {
+  display: flex;
+  flex-direction: column;
+}
+
+form label {
+  margin-bottom: 0.5rem;
+  font-weight: bold;
+}
+
+form input {
+  padding: 0.5rem;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  background-color: var(--input-bg-color);
+  color: var(--input-text-color);
+}
+
+form button {
+  padding: 0.75rem;
+  border: none;
+  border-radius: 4px;
+  background-color: var(--button-bg-color);
+  color: var(--button-text-color);
+  cursor: pointer;
+}
+
+form button:hover {
+  background-color: var(--button-hover-bg-color);
+}
+
+form button:active {
+  background-color: var(--button-active-bg-color);
+}
