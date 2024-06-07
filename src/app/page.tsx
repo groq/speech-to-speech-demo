@@ -539,6 +539,10 @@ const AudioRecorder: React.FC<{ onTranscribe: (transcription: string) => void, o
     ];
     const supportedTypes = typesToCheck.filter(type => MediaRecorder.isTypeSupported(type));
     setSupportedMimeTypes(supportedTypes);
+
+    // set mime type to the first supported type
+    setMimeType(supportedTypes[0]);
+
   }, []);
 
   const handleRecord = async () => {
@@ -574,7 +578,6 @@ const AudioRecorder: React.FC<{ onTranscribe: (transcription: string) => void, o
 
       recorder.ondataavailable = (event: BlobEvent) => {
         audioChunksRef.current.push(event.data);
-        
       };
       recorder.start();
       setMediaRecorder(recorder);
