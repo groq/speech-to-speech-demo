@@ -726,7 +726,7 @@ export default function Home() {
   const router = useRouter()
 
   session.then((session) => {
-    if(!session){
+    if(!session?.user){
       router.push('/auth/signin');
     }
   })
