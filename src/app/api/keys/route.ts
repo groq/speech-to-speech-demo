@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getToken } from "next-auth/jwt";
+import { getServerSession } from "next-auth/next";
 
 const keys = {
   groqApiKey: process.env.GROQ_API_KEY,
@@ -7,10 +7,10 @@ const keys = {
   cartesiaApiKey: process.env.CARTESIA_API_KEY,
 };
 
-export async function GET(req: any) {
-  const token = await getToken({ req, secret: process.env.NEXTAUTH_SECRET });
+export async function GET() {
+  const session = await getServerSession();
 
-  if (!token) {
+  if (!session) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
   return NextResponse.json(keys);
