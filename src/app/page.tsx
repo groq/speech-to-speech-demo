@@ -727,6 +727,7 @@ function App({
             boxShadow: isRecording
               ? "0 0 39px 37px rgba(245, 80, 54, 0.7)"
               : "none",
+            userSelect: "none",
           }}
           onMouseDown={handleMicrophonePress}
           onMouseUp={handleMicrophoneRelease}
