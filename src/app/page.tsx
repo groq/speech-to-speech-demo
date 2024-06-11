@@ -563,8 +563,8 @@ const AudioAnimation = ({ playing }: { playing: boolean }) => {
       ref={containerRef}
       style={{
         position: "relative",
-        width: `${Math.min(window.innerWidth * 0.4, 250)}px`,
-        height: `${Math.min(window.innerWidth * 0.4, 250)}px`,
+        width: `${Math.min(window.innerWidth * 0.6, 350)}px`,
+        height: `${Math.min(window.innerWidth * 0.6, 350)}px`,
       }}
     >
       <div
