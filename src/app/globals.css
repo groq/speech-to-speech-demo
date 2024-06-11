@@ -12,8 +12,8 @@
   --input-bg-color: #333333;
   --input-text-color: #ffffff;
   --input-placeholder-color: #888888;
-  --message-user-bg-color: #333333;
-  --message-assistant-bg-color: #0c377e;
+  --message-user-bg-color: #5B5E72;
+  --message-assistant-bg-color: #30323E;
 }
 
 body {
