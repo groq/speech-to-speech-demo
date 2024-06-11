@@ -636,11 +636,9 @@ function App({
           ...prevHistory,
           { role: "user", content: transcription },
         ]);
-        setHistory((prevHistory) => [
-          ...prevHistory,
-        ]);
+        setHistory((prevHistory) => [...prevHistory]);
         const response = await streamCompletion(transcription, history, groq);
-        
+
         setHistory((prevHistory) => [
           ...prevHistory,
           { role: "assistant", content: response },
@@ -648,9 +646,7 @@ function App({
         await speak(response);
       },
       onRecordingStart: () => {
-        setHistory((prevHistory) => [
-          ...prevHistory,
-        ]);
+        setHistory((prevHistory) => [...prevHistory]);
       },
       onRecordingEnd: () => {
         // No additional actions needed for now
@@ -691,7 +687,7 @@ function App({
   return (
     <div className="flex h-full flex-col">
       <div className="p-4">
-          <img width={"80px"} src="groq.svg" alt="groq" />
+        <img width={"80px"} src="groq.svg" alt="groq" />
       </div>
       {!isShowingMessages && (
         <div className="flex justify-center items-center h-full absolute top-0 left-0 w-full h-full">
@@ -715,61 +711,62 @@ function App({
             height={20}
           />
         </div>
-
-        <div
-          className={`fixed bottom-4 right-4 p-6 rounded-full cursor-pointer select-none ${
-            isRecording ? "recording-animation" : ""
-          }`}
-          style={{
-            backgroundColor: isRecording ? GROQ_ORANGE : GRAY_COLOR,
-            transition: "transform 0.05s ease",
-            transform: `scale(${1 + volume / 100 + (isRecording ? 0.1 : 0)})`,
-            boxShadow: isRecording
-              ? "0 0 39px 37px rgba(245, 80, 54, 0.7)"
-              : "none",
-            userSelect: "none",
-          }}
-          onMouseDown={handleMicrophonePress}
-          onMouseUp={handleMicrophoneRelease}
-          onTouchStart={handleMicrophonePress}
-          onTouchEnd={handleMicrophoneRelease}
-        >
+        <div className="fixed bottom-4 right-4 select-none cursor-pointer">
           <div
+            id="microphone-button"
+            className={`p-6 rounded-full ${
+              isRecording ? "recording-animation" : ""
+            }`}
             style={{
-              transform: `scale(${1 / (1 + volume / 100)})`,
+              backgroundColor: isRecording ? GROQ_ORANGE : GRAY_COLOR,
+              transition: "transform 0.05s ease",
+              transform: `scale(${1 + volume / 100 + (isRecording ? 0.1 : 0)})`,
+              boxShadow: isRecording
+                ? "0 0 39px 37px rgba(245, 80, 54, 0.7)"
+                : "none",
             }}
+            onMouseDown={handleMicrophonePress}
+            onMouseUp={handleMicrophoneRelease}
+            onTouchStart={handleMicrophonePress}
+            onTouchEnd={handleMicrophoneRelease}
           >
-            <Image
-              src={isRecording ? "microphone-white.svg" : "microphone.svg"}
-              className="pointer-events-none"
-              alt="microphone"
-              width={30}
-              height={30}
-            />
+            <div
+              style={{
+                transform: `scale(${1 / (1 + volume / 100)})`,
+              }}
+            >
+              <Image
+                src={isRecording ? "microphone-white.svg" : "microphone.svg"}
+                className="pointer-events-none"
+                alt="microphone"
+                width={30}
+                height={30}
+              />
+            </div>
           </div>
         </div>
 
         {isShowingMessages && (
           <>
-          <div className="flex flex-col pb-24">
-            {history.slice().map((message: any, index) => (
-              <div
-                key={index}
-                className={`p-2 mb-4 rounded-lg ${
-                  message.role === "user"
-                    ? "message-user self-end"
-                    : "message-assistant self-start"
-                }`}
-              >
-                {message.content}
-              </div>
-            ))}
-          </div>
-          {history.length == 0 && (
-            <div className="flex justify-center items-center">
-              <p>Start a conversation by asking a question.</p>
+            <div className="flex flex-col pb-24">
+              {history.slice().map((message: any, index) => (
+                <div
+                  key={index}
+                  className={`p-2 mb-4 rounded-lg ${
+                    message.role === "user"
+                      ? "message-user self-end"
+                      : "message-assistant self-start"
+                  }`}
+                >
+                  {message.content}
+                </div>
+              ))}
             </div>
-          )}
+            {history.length == 0 && (
+              <div className="flex justify-center items-center">
+                <p>Start a conversation by asking a question.</p>
+              </div>
+            )}
           </>
         )}
       </div>
@@ -780,6 +777,31 @@ function App({
 export default function Home() {
   const session = getSession();
   const router = useRouter();
+
+  useEffect(() => {
+    const touchHandler = (ev: any) => {
+      let currentElement = ev.target;
+      while (currentElement) {
+        if (currentElement.id === "microphone-button") {
+          ev.preventDefault();
+          break;
+        }
+        currentElement = currentElement.parentElement;
+      }
+    };
+
+    document.addEventListener('touchstart', touchHandler, { passive: false });
+    document.addEventListener('touchmove', touchHandler, { passive: false });
+    document.addEventListener('touchend', touchHandler, { passive: false });
+    document.addEventListener('touchcancel', touchHandler, { passive: false });
+
+    return () => {
+      document.removeEventListener('touchstart', touchHandler);
+      document.removeEventListener('touchmove', touchHandler);
+      document.removeEventListener('touchend', touchHandler);
+      document.removeEventListener('touchcancel', touchHandler);
+    };
+  }, []);
 
   session.then((session) => {
     if (!session || !session.user) {
