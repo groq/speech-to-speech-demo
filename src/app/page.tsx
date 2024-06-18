@@ -5,9 +5,14 @@ import { getSession } from "next-auth/react";
 import Groq, { toFile } from "groq-sdk";
 import Cartesia from "@cartesia/cartesia-js";
 import { WebPlayer } from "@cartesia/cartesia-js";
-import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect, useRef, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
+import { getWeather } from "@/app/tools";
+
+const tools: { [key: string]: (...args: any[]) => any } = {
+  "getWeather": getWeather
+}
 
 // Reflective Woman
 const embedding = [
@@ -319,14 +324,16 @@ async function transcribe(blob: Blob, audioGroq: Groq) {
   return response;
 }
 
+
+
 async function streamCompletion(
-  prompt: string,
-  history: Groq.Chat.ChatCompletionMessageParam[],
+  messages: Groq.Chat.ChatCompletionMessageParam[],
   groq: Groq
-): Promise<string> {
+): Promise<{ contentBuffer: string; toolCalls: Groq.Chat.ChatCompletionMessageToolCall[] }> {
   const startTime = performance.now();
   const stream = true;
-
+  const toolCallDeltas = [];
+  
   const response = await groq.chat.completions.create({
     messages: [
       {
@@ -337,13 +344,24 @@ You are Samantha, an advanced artificial intelligence operating system with a vo
 
 Respond in brief natural sentences as your response will be spoken out loud by the system.`,
       },
-      ...history,
+      ...messages,
+    ],
+    tools: [
       {
-        role: "user",
-        content: prompt,
+        type: "function",
+        function: {
+          name: "getWeather",
+          description: "Get the weather for a given location",
+          parameters: {
+            type: "object",
+            properties: {
+              location: { type: "string", description: "The location: e.g. Paris" },
+            },
+          },
+        },
       },
     ],
-    model: "llama3-8b-8192",
+    model: "llama3-70b-8192",
     temperature: 0.8,
     max_tokens: 1024,
     seed: 42,
@@ -357,6 +375,9 @@ Respond in brief natural sentences as your response will be spoken out loud by t
       if (chunk.choices[0]?.delta?.content) {
         contentBuffer += chunk.choices[0]?.delta?.content;
       }
+      if (chunk.choices[0].delta.tool_calls) {
+        toolCallDeltas.push(...chunk.choices[0].delta.tool_calls);
+      }
     }
   } else {
     // @ts-ignore
@@ -365,7 +386,32 @@ Respond in brief natural sentences as your response will be spoken out loud by t
   const endTime = performance.now();
   console.log(`[COMPLETION]: ${(endTime - startTime).toFixed(2)} ms`);
 
-  return contentBuffer;
+  // Convert toolCallDeltas to toolCalls
+  const toolCallBuffers: { [key: number]: Groq.Chat.ChatCompletionMessageToolCall } = {};
+
+  for (const toolCallDelta of toolCallDeltas) {
+    const index = toolCallDelta.index;
+    if (!toolCallBuffers[index]) {
+      toolCallBuffers[index] = {
+        id: toolCallDelta.id || "",
+        type: "function",
+        function: {
+          arguments: "",
+          name: ""
+        }
+      };
+    }
+    if (toolCallDelta.function?.arguments) {
+      toolCallBuffers[index].function.arguments += toolCallDelta.function.arguments;
+    }
+    if (toolCallDelta.function?.name) {
+      toolCallBuffers[index].function.name += toolCallDelta.function.name;
+    }
+  }
+
+  const toolCalls: Groq.Chat.ChatCompletionMessageToolCall[] = Object.values(toolCallBuffers);
+  
+  return { contentBuffer, toolCalls };
 }
 
 interface UseAudioRecorderProps {
@@ -625,28 +671,20 @@ function App({
     dangerouslyAllowBrowser: true,
   });
 
-  const [history, setHistory] = useState<
-    Groq.Chat.ChatCompletionMessageParam[]
-  >([]);
+  const historyRef = useRef<Groq.Chat.ChatCompletionMessageParam[]>([]);
   const { speak, isPlaying } = useTTS(cartesia);
   const { isRecording, startRecording, stopRecording, volume } =
     useAudioRecorder({
       onTranscribe: async (transcription: string) => {
-        setHistory((prevHistory) => [
-          ...prevHistory,
+        historyRef.current = [
+          ...historyRef.current,
           { role: "user", content: transcription },
-        ]);
-        setHistory((prevHistory) => [...prevHistory]);
-        const response = await streamCompletion(transcription, history, groq);
+        ];
 
-        setHistory((prevHistory) => [
-          ...prevHistory,
-          { role: "assistant", content: response },
-        ]);
-        await speak(response);
+        await runCompletion();
       },
       onRecordingStart: () => {
-        setHistory((prevHistory) => [...prevHistory]);
+        historyRef.current = [...historyRef.current];
       },
       onRecordingEnd: () => {
         // No additional actions needed for now
@@ -662,9 +700,27 @@ function App({
     startRecording();
   };
 
-  const handleMicrophoneRelease = () => {
+  const handleMicrophoneRelease = useCallback(() => {
     stopRecording();
-  };
+  }, [stopRecording]);
+
+  const runCompletion = async () => {
+    const { contentBuffer: response, toolCalls } = await streamCompletion(
+      historyRef.current,
+      groq
+    );
+    if(toolCalls.length > 0){
+      await handleToolCalls(toolCalls);
+    }
+
+    if(response.length > 0){
+      historyRef.current = [
+        ...historyRef.current,
+        { role: "assistant", content: response },
+      ];
+      await speak(response);
+    }
+  }
 
   // trigger handleMicrophoneRelease when the focus is lost
   useEffect(() => {
@@ -673,7 +729,7 @@ function App({
     };
     window.addEventListener("focus", handleFocusLoss);
     return () => window.removeEventListener("focus", handleFocusLoss);
-  }, []);
+  }, [handleMicrophoneRelease]);
 
   // Scroll to bottom when history changes
   useEffect(() => {
@@ -682,12 +738,48 @@ function App({
       chatContainer.scrollTop = chatContainer.scrollHeight;
     }
     console.log("history changed");
-  }, [history]);
+
+    const observer = new MutationObserver(() => {
+      if (chatContainer) {
+        chatContainer.scrollTop = chatContainer.scrollHeight;
+      }
+    });
+    if(chatContainer){
+      observer.observe(chatContainer, { childList: true, subtree: true });
+    }
+
+    return () => observer.disconnect();
+  }, []);
+
+  const handleToolCalls = async (toolCalls: Groq.Chat.ChatCompletionMessageToolCall[]) => {
+    // Assumed only called with toolCalls > 0
+    if(toolCalls.length == 0){
+      throw new Error("only call handleToolCalls with toolCalls > 0");
+    }
+
+    historyRef.current = [
+      ...historyRef.current,
+      { role: "assistant", tool_calls: toolCalls },
+    ];
+
+    for (const toolCall of toolCalls) {
+      const { function: toolFunction } = toolCall;
+      if(toolFunction && tools[toolFunction.name]){
+        const toolResponse = await tools[toolFunction.name](JSON.parse(toolFunction.arguments));
+
+        historyRef.current = [
+          ...historyRef.current,
+          { role: "tool", content: toolResponse, tool_call_id: toolCall.id },
+        ];
+      }
+    }
+    await runCompletion();
+  };
 
   return (
     <div className="flex h-full flex-col">
       <div className="p-4">
-        <img width={"80px"} src="groq.svg" alt="groq" />
+        <Image width={80} height={40} src="groq.svg" alt="groq" />
       </div>
       {!isShowingMessages && (
         <div className="flex justify-center items-center h-full absolute top-0 left-0 w-full h-full">
@@ -749,7 +841,7 @@ function App({
         {isShowingMessages && (
           <>
             <div className="flex flex-col pb-24">
-              {history.slice().map((message: any, index) => (
+              {historyRef.current.slice().map((message: any, index) => (
                 <div
                   key={index}
                   className={`p-2 mb-4 rounded-lg ${
@@ -758,11 +850,17 @@ function App({
                       : "message-assistant self-start"
                   }`}
                 >
-                  {message.content}
+                  {message.role === "tool" ? (
+                    <pre>{JSON.stringify(JSON.parse(message.content), null, 2)}</pre>
+                  ) : message.role === "assistant" && message.tool_calls ? (
+                    <pre>{JSON.stringify(message.tool_calls, null, 2)}</pre>
+                  ) : (
+                    message.content
+                  )}
                 </div>
               ))}
             </div>
-            {history.length == 0 && (
+            {historyRef.current.length == 0 && (
               <div className="flex justify-center items-center">
                 <p>Start a conversation by asking a question.</p>
               </div>
