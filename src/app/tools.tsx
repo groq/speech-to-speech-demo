@@ -1,3 +1,6 @@
+import Groq from "groq-sdk";
+
+
 export async function getWeather({location}: {location: string}): Promise<string> {
   try {
     const response = await fetch(`/api/weather?location=${location}`);
@@ -11,3 +14,17 @@ export async function getWeather({location}: {location: string}): Promise<string
     return JSON.stringify({ error: `Error: ${error}` });
   }
 }
+
+export const getWeatherSchema: Groq.Chat.Completions.ChatCompletionTool = {
+  type: "function",
+  function: {
+    name: "getWeather",
+    description: "Get the weather for a given location",
+    parameters: {
+      type: "object",
+      properties: {
+        location: { type: "string", description: "The location: e.g. Paris" },
+      },
+    },
+  },
+};

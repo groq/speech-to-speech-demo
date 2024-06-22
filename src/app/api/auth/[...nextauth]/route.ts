@@ -6,7 +6,7 @@ const users = [
   {
     id: 1,
     name: 'John Doe',
-    email: 'admin@groq.com',
+    email: 'dummy@groq.com',
     password: bcrypt.hashSync('groqspeed', 10),
   },
   // Add more users as needed

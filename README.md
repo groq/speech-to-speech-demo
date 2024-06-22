@@ -1,13 +1,26 @@
-# Custom
+# Speech-to-Speech Groq demo
 
 ## Environment variables
 The following environment variables are used in this project:
 
-- `GROQ_API_KEY`: API key for accessing GROQ services.
-- `AUDIO_GROQ_API_KEY`: API key for accessing audio-related GROQ services.
-- `CARTESIA_API_KEY`: API key for accessing Cartesia services.
+- `GROQ_API_KEY`: API key for accessing Groq services. Get one [here](https://console.groq.com/).
+- `CARTESIA_API_KEY`: API key for accessing Cartesia services (optional: required for text-to-speech abilities). Get one [here](https://play.cartesia.ai/console).
+
+> **WARNING:** This demo app exposes the API keys in the browser. Assume your keys are readable in plain-text by anyone using the web application.
+
+## Login
+
+Username: dummy@groq.com
+
+Password: groqspeed
 
 These variables should be set in your `.env.local` file for local development.
+
+## Happy Hacking!
+
+What follows is the regular Next.js README in case you're not familiar with the Next.js framework.
+
+---
 
 # Next.js
 
