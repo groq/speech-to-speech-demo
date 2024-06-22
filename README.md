@@ -6,6 +6,8 @@ The following environment variables are used in this project:
 - `GROQ_API_KEY`: API key for accessing Groq services. Get one [here](https://console.groq.com/).
 - `CARTESIA_API_KEY`: API key for accessing Cartesia services (optional: required for text-to-speech abilities). Get one [here](https://play.cartesia.ai/console).
 
+Rename `.env.local.example` and populate the values.
+
 > **WARNING:** This demo app exposes the API keys in the browser. Assume your keys are readable in plain-text by anyone using the web application.
 
 ## Login
