@@ -16,6 +16,8 @@ Username: dummy@groq.com
 
 Password: groqspeed
 
+You can change it here: `src/app/api/auth/[...nextauth]/route.ts`
+
 These variables should be set in your `.env.local` file for local development.
 
 ## Happy Hacking!
