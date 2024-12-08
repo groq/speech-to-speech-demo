@@ -12,7 +12,7 @@
     "@cartesia/cartesia-js": "^1.0.0-alpha.4",
     "bcryptjs": "^2.4.3",
     "groq-sdk": "^0.4.0",
-    "next": "14.2.3",
+    "next": "14.2.12",
     "next-auth": "^4.24.7",
     "react": "^18",
     "react-dom": "^18"
